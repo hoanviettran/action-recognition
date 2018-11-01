@@ -1,0 +1,8 @@
+.idea
+.vscode
+.mp4
+__pycache__
+videos
+mobilenet_ssd
+*/__pycache__
+output
