@@ -94,7 +94,7 @@ H = None
 # instantiate our centroid tracker, then initialize a list to store
 # each of our dlib correlation trackers, followed by a dictionary to
 # map each unique object ID to a TrackableObject
-ct = CentroidTracker(maxDisappeared=40, maxDistance=50)
+ct = CentroidTracker(maxDisappeared=40, maxDistance=200)
 trackers = []
 trackableObjects = {}
 
@@ -108,6 +108,7 @@ totalUp = 0
 fps = FPS().start()
 DEFAULT_THRESHOLD = 32
 MHI_DURATION = 0.5
+MHI_NUM_FRAMES = 16
 # cv2.namedWindow('motempl')
 # visuals = ['input', 'frame_diff', 'motion_hist', 'grad_orient']
 # cv2.createTrackbar('visual', 'motempl', 2, len(visuals)-1, nothing)
@@ -135,6 +136,7 @@ while True:
 	# less data we have, the faster we can process it), then convert
 	# the frame from BGR to RGB for dlib
 	frame = imutils.resize(frame, width=1280, height=720)
+	frame_copy = frame.copy()
 	rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
 	# if the frame dimensions are empty, set them
@@ -241,8 +243,8 @@ while True:
 			# for the object
 			# box = detection[3:7] * np.array([W, H, W, H])
 			(startX, startY, endX, endY) = box.astype("int")
-			cv2.rectangle(frame,(startX, startY), (endX,endY), (0,255,0), 2)
-			cv2.rectangle(mhi_frame,(startX, startY), (endX,endY), (0,255,0), 1)
+			cv2.rectangle(frame_copy,(startX, startY), (endX,endY), (0,255,0), 2)
+			# cv2.rectangle(mhi_frame,(startX, startY), (endX,endY), (0,255,0), 1)
 			# construct a dlib rectangle object from the bounding
 			# box coordinates and then start the dlib correlation
 			# tracker
@@ -275,8 +277,8 @@ while True:
 
 			# add the bounding box coordinates to the rectangles list
 			rects.append((startX, startY, endX, endY))
-			cv2.rectangle(frame,(startX, startY), (endX,endY), (0,255,0), 2)
-			cv2.rectangle(mhi_frame,(startX, startY), (endX,endY), (0,255,0), 1)
+			cv2.rectangle(frame_copy,(startX, startY), (endX,endY), (0,255,0), 2)
+			# cv2.rectangle(mhi_frame,(startX, startY), (endX,endY), (0,255,0), 1)
 
 	# draw a horizontal line in the center of the frame -- once an
 	# object crosses this line we will determine whether they were
@@ -288,15 +290,28 @@ while True:
 	objects = ct.update(rects)
 
 	# loop over the tracked objects
-	for (objectID, centroid) in objects.items():
+	for (objectID, centroid_rect) in objects.items():
 		# check to see if a trackable object exists for the current
 		# object ID
 		to = trackableObjects.get(objectID, None)
 
 		# if there is no existing trackable object, create one
 		if to is None:
-			to = TrackableObject(objectID, centroid)
+			to = TrackableObject(objectID, centroid_rect[0], MHI_NUM_FRAMES)
 
+		centroid = centroid_rect[0]
+		startX = centroid_rect[1][0]
+		startY = centroid_rect[1][1]
+		endX = centroid_rect[1][2]
+		endY = centroid_rect[1][3]
+
+		to.bbqueue.enqueue(np.array([[startX,startY], [endX,endY], [startX,endY], [endX,startY]]))
+		to.boudingbox()
+
+		b_x,b_y,b_w,b_h = to.bb
+		cv2.rectangle(mhi_frame,(b_x, b_y), (b_x+b_w,b_y+b_h), (0,255,0), 3)
+
+		# print(to.bb)
 		# # otherwise, there is a trackable object so we can utilize it
 		# # to determine direction
 		# else:
@@ -330,9 +345,9 @@ while True:
 		# draw both the ID of the object and the centroid of the
 		# object on the output frame
 		text = "ID {}".format(objectID)
-		cv2.putText(frame, text, (centroid[0] - 10, centroid[1] - 10),
+		cv2.putText(frame_copy, text, (centroid[0] - 10, centroid[1] - 10),
 			cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-		cv2.circle(frame, (centroid[0], centroid[1]), 2, (0, 255, 0), -1)
+		cv2.circle(frame_copy, (centroid[0], centroid[1]), 2, (0, 255, 0), -1)
 		cv2.putText(mhi_frame, text, (centroid[0] - 10, centroid[1] - 10),
 			cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 		cv2.circle(mhi_frame, (centroid[0], centroid[1]), 1, (0, 255, 0), -1)
@@ -356,7 +371,7 @@ while True:
 		writer.write(frame)
 
 	# show the output frame
-	cv2.imshow("Frame", frame)
+	cv2.imshow("Frame", frame_copy)
 	cv2.imshow("MHI_Frame", mhi_frame)
 	key = cv2.waitKey(1) & 0xFF
 

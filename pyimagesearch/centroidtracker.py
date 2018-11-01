@@ -23,10 +23,10 @@ class CentroidTracker:
 		# distance we'll start to mark the object as "disappeared"
 		self.maxDistance = maxDistance
 
-	def register(self, centroid):
+	def register(self, centroid, rect):
 		# when registering an object we use the next available object
 		# ID to store the centroid
-		self.objects[self.nextObjectID] = centroid
+		self.objects[self.nextObjectID] = list((centroid,rect))
 		self.disappeared[self.nextObjectID] = 0
 		self.nextObjectID += 1
 
@@ -69,7 +69,7 @@ class CentroidTracker:
 		# centroids and register each of them
 		if len(self.objects) == 0:
 			for i in range(0, len(inputCentroids)):
-				self.register(inputCentroids[i])
+				self.register(inputCentroids[i],rects[i])
 
 		# otherwise, are are currently tracking objects so we need to
 		# try to match the input centroids to existing object
@@ -78,7 +78,8 @@ class CentroidTracker:
 			# grab the set of object IDs and corresponding centroids
 			objectIDs = list(self.objects.keys())
 			objectCentroids = list(self.objects.values())
-
+			objectCentroids = [objectCentroid[0] for objectCentroid in objectCentroids]
+            
 			# compute the distance between each pair of object
 			# centroids and input centroids, respectively -- our
 			# goal will be to match an input centroid to an existing
@@ -121,7 +122,7 @@ class CentroidTracker:
 				# set its new centroid, and reset the disappeared
 				# counter
 				objectID = objectIDs[row]
-				self.objects[objectID] = inputCentroids[col]
+				self.objects[objectID] = list((inputCentroids[col],rects[col]))
 				self.disappeared[objectID] = 0
 
 				# indicate that we have examined each of the row and
@@ -138,26 +139,26 @@ class CentroidTracker:
 			# equal or greater than the number of input centroids
 			# we need to check and see if some of these objects have
 			# potentially disappeared
-			if D.shape[0] >= D.shape[1]:
-				# loop over the unused row indexes
-				for row in unusedRows:
-					# grab the object ID for the corresponding row
-					# index and increment the disappeared counter
-					objectID = objectIDs[row]
-					self.disappeared[objectID] += 1
+			# if D.shape[0] > D.shape[1]:
+			# loop over the unused row indexes
+			for row in unusedRows:
+				# grab the object ID for the corresponding row
+				# index and increment the disappeared counter
+				objectID = objectIDs[row]
+				self.disappeared[objectID] += 1
 
-					# check to see if the number of consecutive
-					# frames the object has been marked "disappeared"
-					# for warrants deregistering the object
-					if self.disappeared[objectID] > self.maxDisappeared:
-						self.deregister(objectID)
+				# check to see if the number of consecutive
+				# frames the object has been marked "disappeared"
+				# for warrants deregistering the object
+				if self.disappeared[objectID] > self.maxDisappeared:
+					self.deregister(objectID)
 
 			# otherwise, if the number of input centroids is greater
 			# than the number of existing object centroids we need to
 			# register each new input centroid as a trackable object
-			else:
-				for col in unusedCols:
-					self.register(inputCentroids[col])
+			# else:
+			for col in unusedCols:
+				self.register(inputCentroids[col],rects[col])
 
 		# return the set of trackable objects
 		return self.objects
